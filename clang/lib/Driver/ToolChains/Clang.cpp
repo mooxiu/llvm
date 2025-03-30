@@ -4651,6 +4651,14 @@ static void ProcessVSRuntimeLibrary(const ArgList &Args,
 void Clang::ConstructJob(Compilation &C, const JobAction &JA,
                          const InputInfo &Output, const InputInfoList &Inputs,
                          const ArgList &Args, const char *LinkingOutput) const {
+  {
+    llvm::errs() << "---------------------Clang::ConstructJob--------------------\n";
+    llvm::errs() << "[Debug] Action Kind: " << JA.getClassName() << "\n";
+    for (const llvm::opt::Arg* A: Args) {
+      llvm::errs() << A->getAsString(Args) << "\n";
+    }
+
+  }
   const auto &TC = getToolChain();
   const llvm::Triple &RawTriple = TC.getTriple();
   const llvm::Triple &Triple = TC.getEffectiveTriple();
@@ -8722,6 +8730,9 @@ void OffloadPackager::ConstructJob(Compilation &C, const JobAction &JA,
                                    const InputInfoList &Inputs,
                                    const llvm::opt::ArgList &Args,
                                    const char *LinkingOutput) const {
+  {
+    llvm::errs() << "---------------------Currently in OffloadPackager::ConstructJob--------------------\n";
+  }
   ArgStringList CmdArgs;
 
   // Add the output file name.

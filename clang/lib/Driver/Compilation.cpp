@@ -60,6 +60,20 @@ Compilation::~Compilation() {
 const DerivedArgList &
 Compilation::getArgsForToolChain(const ToolChain *TC, StringRef BoundArch,
                                  Action::OffloadKind DeviceOffloadKind) {
+  llvm::errs() << "---------------------getArgsForToolChain--------------------\n";
+  llvm::errs() << "ToolChain: " << (TC ? TC->getTriple().str() : "nullptr") << "\n";
+  llvm::errs() << "BoundArch: " << (BoundArch.empty() ? "(none)" : BoundArch) << "\n"; // TODO: this is empty........... no necessarily wrong but why?
+  llvm::errs() << "OffloadKind: ";
+  switch (DeviceOffloadKind) {
+    case Action::OFK_None:    llvm::errs() << "None\n"; break;
+    case Action::OFK_Host:    llvm::errs() << "Host\n"; break;
+    case Action::OFK_OpenMP:  llvm::errs() << "OpenMP\n"; break; // we get DeviceOffloadKind equal to OpenMP here, should be no problem
+    case Action::OFK_Cuda:    llvm::errs() << "CUDA\n"; break;
+    case Action::OFK_HIP:     llvm::errs() << "HIP\n"; break;
+    default:                  llvm::errs() << "Unknown\n"; break;
+  }
+
+
   if (!TC)
     TC = &DefaultToolChain;
 
@@ -67,25 +81,67 @@ Compilation::getArgsForToolChain(const ToolChain *TC, StringRef BoundArch,
   if (!Entry) {
     SmallVector<Arg *, 4> AllocatedArgs;
     DerivedArgList *OpenMPArgs = nullptr;
+
+    // Debug: Print Offload kind
+    llvm::errs() << "[DEBUG] Device offload kind: " << DeviceOffloadKind << "\n";
+
     // Translate OpenMP toolchain arguments provided via the -Xopenmp-target flags.
     if (DeviceOffloadKind == Action::OFK_OpenMP) {
       const ToolChain *HostTC = getSingleOffloadToolChain<Action::OFK_Host>();
       bool SameTripleAsHost = (TC->getTriple() == HostTC->getTriple());
+
+      // Debug: Print Host vs. Target Triples
+      llvm::errs() << "[DEBUG] Host Triple: " << HostTC->getTriple().str() << "\n";
+      llvm::errs() << "[DEBUG] Target Triple: " << TC->getTriple().str() << "\n";
+      llvm::errs() << "[DEBUG] Same Triple as Host: " << SameTripleAsHost << "\n";
+
+      // Translating the related args to openMP forms
       OpenMPArgs = TC->TranslateOpenMPTargetArgs(
           *TranslatedArgs, SameTripleAsHost, AllocatedArgs);
+
+      // Debug: Print OpenMP Args
+      if (OpenMPArgs) {
+        llvm::errs() << "[DEBUG] OpenMPArgs are present:\n";
+        for (const auto *Arg : OpenMPArgs->getArgs()) {
+          llvm::errs() << "[DEBUG]  OpenMP Arg: " << Arg->getAsString(*TranslatedArgs) << "\n";
+        }
+      } else {
+        llvm::errs() << "[DEBUG] No OpenMPArgs found!\n";
+      }
+
+      /**
+       * TODO: after this parsing, the OpenMPArgs are becoming something lik:
+       *
+       */
     }
 
     DerivedArgList *NewDAL = nullptr;
     if (!OpenMPArgs) {
+      // if there's no openMP args
       NewDAL = TC->TranslateXarchArgs(*TranslatedArgs, BoundArch,
                                       DeviceOffloadKind, &AllocatedArgs);
     } else {
+      // NOTE: this will deal with args like '-Xarch_target=targetname -flag' which is our main args
       NewDAL = TC->TranslateXarchArgs(*OpenMPArgs, BoundArch, DeviceOffloadKind,
                                       &AllocatedArgs);
       if (!NewDAL)
         NewDAL = OpenMPArgs;
       else
         delete OpenMPArgs;
+
+      // Check what is NewDAL here
+      if (NewDAL) {
+        llvm::errs() << "---------------------DAL--------------------\n";
+        for (Arg *A : NewDAL->getArgs()) {
+          llvm::errs() << "[DEBUG] NewDAL Arg: " << A->getSpelling() << " ";
+          for (unsigned i = 0; i < A->getNumValues(); ++i)
+            llvm::errs() << A->getValue(i) << " ";
+          llvm::errs() << "\n";
+        }
+      } else {
+        llvm::errs() << "[DEBUG] No NewDAL!\n";
+      }
+      // NOTE: we indeed found NewDAL, and they are almost the same as OpenMPArgs
     }
 
     if (!NewDAL) {
@@ -98,6 +154,18 @@ Compilation::getArgsForToolChain(const ToolChain *TC, StringRef BoundArch,
         Entry = NewDAL;
       else
         delete NewDAL;
+
+      if (Entry) {
+        llvm::errs() << "---------------------Entry--------------------\n";
+        for (Arg *A : Entry->getArgs()) {
+          llvm::errs() << "[DEBUG] Entry Arg: " << A->getSpelling() << " ";
+          for (unsigned i = 0; i < A->getNumValues(); ++i)
+            llvm::errs() << A->getValue(i) << " ";
+          llvm::errs() << "\n";
+        }
+      } else {
+        llvm::errs() << "[DEBUG] No Entry!\n";
+      }
     }
 
     // Add allocated arguments to the final DAL.
