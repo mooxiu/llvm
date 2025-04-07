@@ -76,6 +76,7 @@
 #include "llvm/Option/OptSpecifier.h"
 #include "llvm/Option/OptTable.h"
 #include "llvm/Option/Option.h"
+#include "llvm/Support/Casting.h"
 #include "llvm/Support/CommandLine.h"
 #include "llvm/Support/ErrorHandling.h"
 #include "llvm/Support/ExitCodes.h"
@@ -941,6 +942,7 @@ void Driver::CreateOffloadingDeviceToolChains(Compilation &C,
           DeviceTC = std::make_unique<toolchains::RISCVToolChain>(
               *this, TT, C.getInputArgs());
         }
+        // here the DeviceTC's triple should be riscv64-unknown-elf
 
         C.addOffloadDeviceToolChain(DeviceTC.get(), Action::OFK_OpenMP);
         if (DerivedArchs.contains(TT.getTriple()))
@@ -1203,6 +1205,15 @@ bool Driver::loadDefaultConfigFiles(llvm::cl::ExpansionContext &ExpCtx) {
 
 Compilation *Driver::BuildCompilation(ArrayRef<const char *> ArgList) {
   llvm::PrettyStackTraceString CrashInfo("Compilation construction");
+
+  static int counter = 0;
+  counter++;
+  llvm::errs() << "[DEBUG] BuildCompilation count: " << counter
+             << ", Driver instance: " << this << "\n";
+  for (auto *arg : ArgList) {
+    llvm::errs() << "[DEBUG] Arg: " << arg << "\n";
+  } 
+
 
   // FIXME: Handle environment options which affect driver behavior, somewhere
   // (client?). GCC_EXEC_PREFIX, LPATH, CC_PRINT_OPTIONS.

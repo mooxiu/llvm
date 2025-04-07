@@ -389,6 +389,21 @@ Expected<StringRef> clang(ArrayRef<StringRef> InputFiles, const ArgList &Args) {
       "-Wl,--no-undefined",
   };
 
+  llvm::errs() << "-------------------- check args passed to CLW:clang begin -------------------- \n";
+  llvm::errs() << "[DEBUG]InputFiles: ";
+  for (const StringRef sf: InputFiles) {
+    llvm::errs() << sf <<  "\n";
+  }
+
+  llvm::errs() << "[DEBUG]Args: ";
+  for (Arg *A : Args.getArgs()) {
+    llvm::errs() << "[DEBUG] Entry Arg: " << A->getSpelling() << " ";
+    for (unsigned i = 0; i < A->getNumValues(); ++i)
+      llvm::errs() << A->getValue(i) << " ";
+    llvm::errs() << "\n";
+  }
+  llvm::errs() << "-------------------- check args passed to CLW:clang end -------------------- \n";
+
   for (StringRef InputFile : InputFiles)
     CmdArgs.push_back(InputFile);
 
@@ -461,6 +476,7 @@ Expected<StringRef> clang(ArrayRef<StringRef> InputFiles, const ArgList &Args) {
   // this when running CodeGen through clang.
   if (Args.hasArg(OPT_clang_backend) || Args.hasArg(OPT_builtin_bitcode_EQ))
     CmdArgs.append({"-mllvm", "-openmp-opt-disable"});
+
 
   if (Error Err = executeCommands(*ClangPath, CmdArgs))
     return std::move(Err);
@@ -1475,6 +1491,14 @@ int main(int Argc, char **Argv) {
   InitializeAllTargetMCs();
   InitializeAllAsmParsers();
   InitializeAllAsmPrinters();
+
+  {
+    llvm::errs() << "<<<<<<<<<<<<<<<[CLW] Hello>>>>>>>>>>>>>>>\n";
+    for (int i = 0; i < Argc; i++) {
+      llvm::errs() << "Arg[" << i << "]: " << Argv[i] << "\n";
+    }
+    llvm::errs() << "<<<<<<<<<<<<<<<[CLW] Bye>>>>>>>>>>>>>>>\n";
+  }
 
   LinkerExecutable = Argv[0];
   sys::PrintStackTraceOnErrorSignal(Argv[0]);

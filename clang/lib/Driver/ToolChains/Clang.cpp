@@ -43,6 +43,7 @@
 #include "clang/Driver/XRayArgs.h"
 #include "llvm/ADT/SmallSet.h"
 #include "llvm/ADT/StringExtras.h"
+#include "llvm/ADT/StringRef.h"
 #include "llvm/BinaryFormat/Magic.h"
 #include "llvm/Config/llvm-config.h"
 #include "llvm/Object/ObjectFile.h"
@@ -56,11 +57,14 @@
 #include "llvm/Support/Process.h"
 #include "llvm/Support/RISCVISAInfo.h"
 #include "llvm/Support/YAMLParser.h"
+#include "llvm/Support/raw_ostream.h"
 #include "llvm/TargetParser/ARMTargetParserCommon.h"
 #include "llvm/TargetParser/Host.h"
 #include "llvm/TargetParser/LoongArchTargetParser.h"
 #include "llvm/TargetParser/RISCVTargetParser.h"
+#include <algorithm>
 #include <cctype>
+#include <vector>
 
 using namespace clang::driver;
 using namespace clang::driver::tools;
@@ -4652,12 +4656,18 @@ void Clang::ConstructJob(Compilation &C, const JobAction &JA,
                          const InputInfo &Output, const InputInfoList &Inputs,
                          const ArgList &Args, const char *LinkingOutput) const {
   {
-    llvm::errs() << "---------------------Clang::ConstructJob--------------------\n";
+    llvm::errs() << "---------------------Clang::ConstructJob Start--------------------\n";
     llvm::errs() << "[Debug] Action Kind: " << JA.getClassName() << "\n";
     for (const llvm::opt::Arg* A: Args) {
       llvm::errs() << A->getAsString(Args) << "\n";
     }
-
+    llvm::errs() << "[Debug] Output: " << Output.getFilename() << "\n";
+    for (const auto &II : Inputs) {
+      llvm::errs() << "[Debug] Input: " << II.getFilename() << "\n";
+    }
+    if (LinkingOutput)
+      llvm::errs() << "[Debug] LinkingOutput: " << LinkingOutput << "\n";
+    llvm::errs() << "---------------------Clang::ConstructJob End--------------------\n";
   }
   const auto &TC = getToolChain();
   const llvm::Triple &RawTriple = TC.getTriple();
@@ -8799,6 +8809,16 @@ void LinkerWrapper::ConstructJob(Compilation &C, const JobAction &JA,
   const Driver &D = getToolChain().getDriver();
   const llvm::Triple TheTriple = getToolChain().getTriple();
   ArgStringList CmdArgs;
+  llvm::errs() << "[Debug]: LinkerWrapper::ConstructJob begin" << "\n";
+  llvm::errs() << "The address of the driver: " << &D << "\n";
+  llvm::errs() << "The output is: " << Output.getAsString() << "\n";
+  llvm::errs() << "The args are: \n";
+  for (auto *Arg : Args) {
+    llvm::errs() << Arg->getSpelling() << " ";
+  }
+  llvm::errs() << "\n";
+  llvm::errs() << "The triple is: " << TheTriple.getTriple() << "\n";
+  llvm::errs() << "JobAction kind is:" << JA.getKind()  << "\n";
 
   // Pass the CUDA path to the linker wrapper tool.
   for (Action::OffloadKind Kind : {Action::OFK_Cuda, Action::OFK_OpenMP}) {
@@ -8814,6 +8834,31 @@ void LinkerWrapper::ConstructJob(Compilation &C, const JobAction &JA,
       }
     }
   }
+
+  // Pass the openmp path to the linker wrapper tool
+  if (Args.getLastArg(options::OPT_fopenmp)) {
+    llvm::errs() << "hello\n";
+    // if has '-fopenmp' and target is set by '-fopenmp-targets={triple}'
+    // add all the arguments with '-Xopenmp-target={triple}' to CmdArgs
+    if (const Arg *A = Args.getLastArg(options::OPT_fopenmp_targets_EQ)) {
+
+      llvm::errs() << "world\n";
+      const auto *target = A->getValue(0);
+
+      for (const Arg *AA : Args.getArgs()) {
+        if (StringRef(AA->getValue(0))!= StringRef(target)) {
+          continue;
+        }
+        if (AA->getNumValues() > 1) {
+          for (unsigned int i = 1; i < AA->getNumValues(); i++) {
+            CmdArgs.push_back(Args.MakeArgString(AA->getValue(i)));
+          }
+        }
+      }
+    }
+  }
+
+
 
   // Pass in the optimization level to use for LTO.
   if (const Arg *A = Args.getLastArg(options::OPT_O_Group)) {
@@ -8903,6 +8948,14 @@ void LinkerWrapper::ConstructJob(Compilation &C, const JobAction &JA,
   CmdArgs.push_back("--");
   for (const char *LinkArg : LinkCommand->getArguments())
     CmdArgs.push_back(LinkArg);
+
+
+  llvm::errs() << "CmdArgs: \n"; 
+  for (auto *cmdarg : CmdArgs) {
+    llvm::errs() << cmdarg << " ";
+  }
+  llvm::errs() << "\n";
+  llvm::errs() << "[Debug]: LinkerWrapper::ConstructJob end" << "\n"; 
 
   const char *Exec =
       Args.MakeArgString(getToolChain().GetProgramPath("clang-linker-wrapper"));

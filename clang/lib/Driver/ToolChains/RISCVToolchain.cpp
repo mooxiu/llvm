@@ -90,15 +90,35 @@ void RISCVToolChain::addClangTargetOptions(
     const llvm::opt::ArgList &DriverArgs,
     llvm::opt::ArgStringList &CC1Args,
     Action::OffloadKind OFK) const {
+    
+  llvm::errs() << "[DEBUG] addClangTargetOptions 0\n";
   CC1Args.push_back("-nostdsysteminc");
 
   if (OFK == Action::OFK_OpenMP) {
+    llvm::errs() << "[DEBUG] addClangTargetOptions 1\n";
+
     if (DriverArgs.hasArg(options::OPT_fopenmp_targets_EQ)) {
+
+
+      llvm::errs() << "[DEBUG] addClangTargetOptions 2\n";
       for (auto *Arg : DriverArgs.filtered(options::OPT_fopenmp_targets_EQ)) {
         for (StringRef Target : Arg->getValues()) {
+
           if (Target == "vortex") {
+            llvm::errs() << "[DEBUG] addClangTargetOptions 3\n";
+            auto arg = DriverArgs.getLastArg(options::OPT_aux_triple);
+            llvm::errs() << "lastArg: " << arg << "\n";
+
+
+
             if (DriverArgs.getLastArg(options::OPT_aux_triple) &&
-                StringRef(DriverArgs.getLastArgValue(options::OPT_aux_triple)) == "riscv64-unknown-elf") {
+                (
+                  StringRef(DriverArgs.getLastArgValue(options::OPT_aux_triple)) == "riscv64-unknown-elf" ||
+                  StringRef(DriverArgs.getLastArgValue(options::OPT_aux_triple)) == "riscv64-unknown-unknown-elf" 
+                )
+              ) {
+
+              llvm::errs() << "[DEBUG] addClangTargetOptions 4\n";
               // Add Vortex-specific flags
               CC1Args.push_back("-march=rv64imafd");
               CC1Args.push_back("-mabi=lp64d");
@@ -176,6 +196,28 @@ void RISCV::Linker::ConstructJob(Compilation &C, const JobAction &JA,
                                  const InputInfoList &Inputs,
                                  const ArgList &Args,
                                  const char *LinkingOutput) const {
+  llvm::errs() << ">>>>>>>>>>>>>>>>>>>>RISCV::Linker::ConstructJob Start<<<<<<<<<<<<<<<<<<<<\n";
+  llvm::errs() << "[Debug] Inputs\n";
+  for (auto const in: Inputs) {
+    llvm::errs() << in.getFilename();
+  }
+  llvm::errs() << "\n";
+
+
+  llvm::errs() << "[Debug] Output\n";
+  llvm::errs() << Output.getAsString() << "\n" ;
+
+  llvm::errs() << "[Debug] Args\n";
+  for (auto *const arg: Args.getArgs()) {
+    llvm::errs() << arg->getSpelling() << ":";
+    for (int i = 0; i < arg->getNumValues(); i++) {
+      llvm::errs() << arg->getValue(i) << "\n";
+    } 
+  }
+
+  llvm::errs() << ">>>>>>>>>>>>>>>>>>>>RISCV::Linker::ConstructJob Finish<<<<<<<<<<<<<<<<<<<<\n";
+
+
   const ToolChain &ToolChain = getToolChain();
   const Driver &D = ToolChain.getDriver();
   ArgStringList CmdArgs;
