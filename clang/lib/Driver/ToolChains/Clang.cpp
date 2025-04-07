@@ -8804,6 +8804,25 @@ void LinkerWrapper::ConstructJob(Compilation &C, const JobAction &JA,
     }
   }
 
+  // Pass the openmp path to the linker wrapper tool
+  if (Args.getLastArg(options::OPT_fopenmp)) {
+    // if has '-fopenmp' and target is set by '-fopenmp-targets={triple}'
+    // add all the arguments with '-Xopenmp-target={triple}' to CmdArgs
+    if (const Arg *A = Args.getLastArg(options::OPT_fopenmp_targets_EQ)) {
+      const auto *target = A->getValue(0);
+      for (const Arg *AA : Args.getArgs()) {
+        if (StringRef(AA->getValue(0))!= StringRef(target)) {
+          continue;
+        }
+        if (AA->getNumValues() > 1) {
+          for (unsigned int i = 1; i < AA->getNumValues(); i++) {
+            CmdArgs.push_back(Args.MakeArgString(AA->getValue(i)));
+          }
+        }
+      }
+    }
+  }
+
   // Pass in the optimization level to use for LTO.
   if (const Arg *A = Args.getLastArg(options::OPT_O_Group)) {
     StringRef OOpt;
