@@ -462,6 +462,10 @@ Expected<StringRef> clang(ArrayRef<StringRef> InputFiles, const ArgList &Args) {
   if (Args.hasArg(OPT_clang_backend) || Args.hasArg(OPT_builtin_bitcode_EQ))
     CmdArgs.append({"-mllvm", "-openmp-opt-disable"});
 
+  for (StringRef Arg : Args.getAllArgValues(OPT_omp_arg_EQ)) {
+    CmdArgs.push_back(Args.MakeArgString(Arg));
+  }
+
   if (Error Err = executeCommands(*ClangPath, CmdArgs))
     return std::move(Err);
 

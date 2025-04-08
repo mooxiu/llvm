@@ -43,6 +43,7 @@
 #include "clang/Driver/XRayArgs.h"
 #include "llvm/ADT/SmallSet.h"
 #include "llvm/ADT/StringExtras.h"
+#include "llvm/ADT/StringRef.h"
 #include "llvm/BinaryFormat/Magic.h"
 #include "llvm/Config/llvm-config.h"
 #include "llvm/Object/ObjectFile.h"
@@ -8816,7 +8817,7 @@ void LinkerWrapper::ConstructJob(Compilation &C, const JobAction &JA,
         }
         if (AA->getNumValues() > 1) {
           for (unsigned int i = 1; i < AA->getNumValues(); i++) {
-            CmdArgs.push_back(Args.MakeArgString(AA->getValue(i)));
+            CmdArgs.push_back(Args.MakeArgString("--omp-arg=" + StringRef(AA->getValue(i))));
           }
         }
       }
