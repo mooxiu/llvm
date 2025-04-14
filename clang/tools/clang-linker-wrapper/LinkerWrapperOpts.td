@@ -131,3 +131,7 @@ def no_whole_archive : Flag<["--", "-"], "no-whole-archive">, Flags<[HelpHidden]
 def out : Joined<["/", "-", "/?", "-?"], "out:">, Flags<[HelpHidden]>;
 def libpath : Joined<["/", "-", "/?", "-?"], "libpath:">, Flags<[HelpHidden]>;
 def wholearchive_flag : Joined<["/", "-", "/?", "-?"], "wholearchive">, Flags<[HelpHidden]>;
+
+def omp_arg_EQ : Joined<["--"], "omp-arg=">,
+  Flags<[WrapperOnlyOption]>,
+  HelpText<"Extra argument to pass to the OpenMP device compilation/linking phase">;
