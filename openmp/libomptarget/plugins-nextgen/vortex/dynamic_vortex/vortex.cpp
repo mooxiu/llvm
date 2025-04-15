@@ -90,3 +90,8 @@ static bool checkForVortex() {
 
   return true;
 }
+
+bool initVortexSymbols() {
+  static bool Initialized = checkForVortex();
+  return Initialized;
+}

@@ -135,4 +135,5 @@ int vx_check_occupancy(vx_device_h hdevice, uint32_t group_size, uint32_t* max_l
 // performance counters
 int vx_dump_perf(vx_device_h hdevice, FILE* stream);
 
+bool initVortexSymbols();
 #endif

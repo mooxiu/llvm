@@ -100,10 +100,17 @@ struct VortexDeviceTy : public GenericDeviceTy {
   VortexDeviceTy(int32_t DeviceId, int32_t NumDevices)
       : GenericDeviceTy(DeviceId, NumDevices, NVPTXGridValues) {}
 
+  ~VortexDeviceTy() {}
+
   Error setContext() override { return Plugin::success(); };
 
   // Device initialization
   Error initImpl(GenericPluginTy &Plugin) override {
+    // Need to init first, or calling functions like `vs_dev_open` will cause a SEGFAULT
+    if (!initVortexSymbols()) {
+      return Plugin::error("Error in init Vortex");
+    }
+
     int ret = vx_dev_open(&DeviceHandle);
     if (ret != 0)
       return Plugin::error("Error in vx_dev_open: %d", ret);
