@@ -320,6 +320,10 @@ struct VortexDeviceTy : public GenericDeviceTy {
     auto *K = new VortexKernelTy(Name);
     return *K;
   }
+
+  bool shouldSetupDeviceMemoryPool() const override {
+    return false;
+  }
 };
 
 ////////////////////////////////////////////////////////////////////////////////
