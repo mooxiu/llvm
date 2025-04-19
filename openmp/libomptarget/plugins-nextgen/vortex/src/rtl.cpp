@@ -150,7 +150,7 @@ struct VortexDeviceTy : public GenericDeviceTy {
     // Write to a temporary file
     std::string TempFile = "/tmp/vortex_kernel_" + std::to_string(ImageId) + ".bin"; 
     std::ofstream Out(TempFile, std::ios::binary);
-    Out.write((const char*)TgtImage, (std::streamsize)getPtrDiff(TgtImage->ImageEnd, TgtImage->ImageStart));
+    Out.write((const char*)TgtImage->ImageStart, (std::streamsize)getPtrDiff(TgtImage->ImageEnd, TgtImage->ImageStart));
     Out.close();
 
     // upload the kernel memory
