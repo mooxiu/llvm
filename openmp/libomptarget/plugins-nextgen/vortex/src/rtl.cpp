@@ -6,6 +6,11 @@
 //
 //===----------------------------------------------------------------------===//
 
+#include <fstream>
+#include <ios>
+#include <iterator>
+#include <string>
+#include <vector>
 #include <vortex.h>
 
 #include "Shared/Debug.h"
@@ -14,8 +19,12 @@
 #include "GlobalHandler.h"
 #include "OpenMP/OMPT/Callback.h"
 #include "PluginInterface.h"
+#include "Shared/EnvironmentVar.h"
+#include "Shared/Utils.h"
 #include "Utils/ELF.h"
 
+#include "llvm/ADT/StringMap.h"
+#include "llvm/ADT/StringRef.h"
 #include "llvm/BinaryFormat/ELF.h"
 #include "llvm/Frontend/OpenMP/OMPConstants.h"
 #include "llvm/Frontend/OpenMP/OMPGridValues.h"
@@ -62,32 +71,14 @@ struct VortexKernelTy : public GenericKernelTy {
     // but Vortex uses vx_upload_kernel_file and vx_start.
     // This plugin model expects you to have some symbol. For simplicity,
     // assume the kernel is embedded in the Image and we do nothing special.
+    //
+    
     return Plugin::success();
   }
 
   Error launchImpl(GenericDeviceTy &GenericDevice, uint32_t NumThreads,
                    uint64_t NumBlocks, KernelArgsTy &KernelArgs, void *Args,
-                   AsyncInfoWrapperTy &AsyncInfoWrapper) const override {
-    // In the example runtime code, launching a kernel involves:
-    // 1. Uploading the kernel binary (already done on loadBinary)
-    // 2. Uploading the arguments
-    // 3. Starting and waiting for completion (which we do asynchronously here)
-
-    // NOTE: The plugin interface separates launching from waiting. We may need
-    // asynchronous variants if Vortex supports them. Otherwise, we might just
-    // block (not ideal).
-
-    // We'll assume that the device image and arguments are already set.
-    // The Args pointer typically includes all kernel arguments.
-    // For simplicity, suppose we have a structure representing them.
-
-    // TODO: Implement the actual kernel launch.
-    // On Vortex, from the provided example, you'd do something like:
-    //   vx_start(deviceHandle, krnl_buffer, args_buffer);
-    // However, we need a per-kernel resource handle stored somewhere.
-
-    return Plugin::success();
-  }
+                   AsyncInfoWrapperTy &AsyncInfoWrapper) const override;
 };
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -96,7 +87,11 @@ struct VortexKernelTy : public GenericKernelTy {
 
 struct VortexDeviceTy : public GenericDeviceTy {
   vx_device_h DeviceHandle = nullptr;
-
+ 
+  // This is used to store kernel handler for each kernel of the same image
+  // consider that we can have multiple `#pragma omp target` inside
+  llvm::StringMap<vx_buffer_h> KernelBufferMap; 
+ 
   VortexDeviceTy(int32_t DeviceId, int32_t NumDevices)
       : GenericDeviceTy(DeviceId, NumDevices, NVPTXGridValues) {}
 
@@ -149,7 +144,36 @@ struct VortexDeviceTy : public GenericDeviceTy {
     // Create the DeviceImageTy
     auto *Image =
         Plugin::get().allocate<DeviceImageTy>();
+    new (Image) DeviceImageTy(ImageId, *this, TgtImage);
+
+
+    // Write to a temporary file
+    std::string TempFile = "/tmp/vortex_kernel_" + std::to_string(ImageId) + ".bin"; 
+    std::ofstream Out(TempFile, std::ios::binary);
+    Out.write((const char*)TgtImage, (std::streamsize)getPtrDiff(TgtImage->ImageEnd, TgtImage->ImageStart));
+    Out.close();
+
+    // upload the kernel memory
+    vx_buffer_h KernelBuffer;  // kernel handler
+    auto UploadRes = vx_upload_kernel_file(DeviceHandle, TempFile.c_str(), &KernelBuffer);
+    if (UploadRes != 0) {
+      return Plugin::error("Failed to upload kernel image");
+    }
+
+    for (auto *Entry = TgtImage->EntriesBegin; Entry != TgtImage->EntriesEnd; Entry++) {
+      if (Entry->size == 0) { // It is a function
+        KernelBufferMap[Entry->name] = KernelBuffer;
+        DP("Store Kernel Buffer %s to KernelBufferMap", Entry->name);
+      }
+    }
     return Image;
+  }
+  
+  vx_buffer_h getKernelHandler(StringRef Name) const {
+    if (KernelBufferMap.find(Name) != KernelBufferMap.end()) {
+      return KernelBufferMap.at(Name);
+    } 
+    return nullptr;
   }
 
   // Synchronize pending operations
@@ -371,6 +395,44 @@ GenericPluginTy *Plugin::createPlugin() { return new VortexPluginTy(); }
 
 GenericDeviceTy *Plugin::createDevice(int32_t DeviceId, int32_t NumDevices) {
   return new VortexDeviceTy(DeviceId, NumDevices);
+}
+
+Error VortexKernelTy::launchImpl(GenericDeviceTy &GenericDevice, uint32_t NumThreads,
+                   uint64_t NumBlocks, KernelArgsTy &KernelArgs, void *Args,
+                   AsyncInfoWrapperTy &AsyncInfoWrapper) const {
+  // In the example runtime code, launching a kernel involves:
+  // 1. Uploading the kernel binary (already done on loadBinary)
+  // 2. Uploading the arguments
+  // 3. Starting and waiting for completion (which we do asynchronously here)
+
+  // NOTE: The plugin interface separates launching from waiting. We may need
+  // asynchronous variants if Vortex supports them. Otherwise, we might just
+  // block (not ideal).
+
+  // We'll assume that the device image and arguments are already set.
+  // The Args pointer typically includes all kernel arguments.
+  // For simplicity, suppose we have a structure representing them.
+
+  // TODO: Implement the actual kernel launch.
+  // On Vortex, from the provided example, you'd do something like:
+  //   vx_start(deviceHandle, krnl_buffer, args_buffer);
+  // However, we need a per-kernel resource handle stored somewhere.
+
+
+  auto *Dev = static_cast<VortexDeviceTy *>(&GenericDevice);
+  auto HandlerMap = Dev->KernelBufferMap;
+  if (HandlerMap.find(getName()) == HandlerMap.end()) {
+    DP("cannot find kernel name inside of the handler map\n");
+    return Plugin::error("Fail to find Kernel Handler %s inside of the KernelMap", getName());
+  }
+
+
+  int StartRes = vx_start(Dev->DeviceHandle, HandlerMap.at(getName()), Args);
+  if (StartRes != 0) {
+    return Plugin::error("Fail to start kernel");
+  }
+  
+  return Plugin::success();
 }
 
 GenericGlobalHandlerTy *Plugin::createGlobalHandler() {
